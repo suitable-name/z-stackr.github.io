@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Desktop app — z-stackr</title>
+<meta name="description" content="A tour of z-stackr-gui: projects, aligning with a live preview, stacking with Relief, Apex or Strata, the Relief contrast preview, retouching, export, settings and shortcuts.">
+<link rel="icon" type="image/svg+xml" href="assets/images/icon.svg">
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="container">
+    <a href="index.html" class="brand"><img src="assets/images/icon.svg" width="22" height="22" alt=""><span><span class="z">z</span>-stackr</span></a>
+    <nav>
+      <a href="index.html">Overview</a>
+      <a href="methods.html">How it works</a>
+      <a href="app.html" aria-current="page">Desktop app</a>
+      <a href="cli.html">Command line</a>
+      <a href="gpu.html">GPU</a>
+      <a href="project.html">Project</a>
+    </nav>
+  </div>
+</header>
+
+<main class="container">
+
+  <div class="page-head">
+    <p class="eyebrow">z-stackr-gui</p>
+    <h1>The desktop app</h1>
+    <p class="subtitle">
+      Add frames, stack, look, retouch, export. The screenshots on this page are
+      the app's own window, rendered from its interface files.
+    </p>
+  </div>
+
+  <section id="start">
+    <h2><span class="sec-num">01</span>Adding frames</h2>
+    <p>
+      Add photographs with File &rarr; Add Images (<kbd>Ctrl</kbd>+<kbd>O</kbd>), or
+      drop image files, a folder of images or a project file on the window. Frames
+      that cannot be read are skipped and named in a message. A source file is
+      removed with its &times;; Clear empties the list after asking. In a build with
+      the <code>raw</code> feature, camera RAW files can be added as well.
+    </p>
+    <p>
+      Two buttons above the list work on the frames without running a stack.
+      <strong>Sort</strong> rates every frame for sharpness and reorders the list
+      sharpest-first; <strong>Cull</strong> rates them and marks the frames below the
+      cull threshold as culled (the same actions are in the Edit menu). Both need at
+      least one frame and are unavailable while a job runs.
+    </p>
+    <figure class="fig">
+      <a href="assets/images/ui_empty.png"><img src="assets/images/ui_empty.png" width="1400" height="860" alt="The empty window with the New project card and three recent projects" loading="lazy"></a>
+      <figcaption><span class="fig-label">Fig. 1</span>The empty window: click anywhere to add images, start a new project or reopen a recent one.</figcaption>
+    </figure>
+  </section>
+
+  <section id="stacking">
+    <h2><span class="sec-num">02</span>Aligning and stacking</h2>
+    <p>
+      Choose the method in the <strong>Algorithm</strong> box and press
+      <strong>Start Stacking</strong>. The box offers <em>Relief (Depth Map)</em>,
+      <em>Apex (Laplacian)</em>, <em>Strata (Guided Fusion)</em>,
+      <em>Both (Relief &amp; Apex)</em> and <em>All Three (Strata, Relief &amp;
+      Apex)</em>; the last two align once and list one result per method (see
+      <a href="methods.html#apex">how they differ</a>).
+      <strong>Align</strong> runs the alignment alone; <strong>Show Aligned</strong>
+      then shows the aligned, cropped version of the frame you click, and the next
+      stack reuses the aligned frames while the files and the alignment settings are
+      unchanged.
+    </p>
+    <p>
+      While aligning, the canvas shows each frame as it is registered. Every job
+      appears as a chip in the status strip with its progress, the time it has
+      taken, an estimate of the time left and a cancel button. Only one blocking job
+      runs at a time; warnings and errors stay on screen until you dismiss them and
+      are also written to the log.
+    </p>
+    <figure class="fig">
+      <a href="assets/images/ui_main.png"><img src="assets/images/ui_main.png" width="1400" height="860" alt="The main window with a stacked result" loading="lazy"></a>
+      <figcaption><span class="fig-label">Fig. 2</span>A finished stack. Source files and results on the left, the result on the canvas, zoom and fit below it.</figcaption>
+    </figure>
+    <figure class="fig">
+      <a href="assets/images/ui_activity.png"><img src="assets/images/ui_activity.png" width="1400" height="860" alt="A running stack: an activity chip with progress and time left, and a warning message" loading="lazy"></a>
+      <figcaption><span class="fig-label">Fig. 3</span>A stack in progress: the activity chip at the bottom, and a message saying why the run fell back from the GPU to the CPU.</figcaption>
+    </figure>
+    <p>
+      When the files or the settings change after a run, a badge reading
+      <em>Stale (files)</em>, <em>Stale (settings)</em> or both appears under the
+      aligned frames or the newest result, with a <strong>Recompute</strong>
+      button.
+    </p>
+  </section>
+
+  <section id="relief-preview">
+    <h2><span class="sec-num">03</span>The depth-map preview</h2>
+    <p>
+      With <em>Show preview during stacking</em> on, a Relief run pauses on a card over
+      the canvas. The pixels that would take the mean of all frames instead of one
+      sharp frame are tinted; move the contrast threshold, or press
+      <strong>Auto-detect</strong> (the median of the focus scores plus 1.5 times
+      their median absolute deviation), then <strong>Apply</strong> or
+      <strong>Cancel</strong>. The card is not a dialog: the rest of the window and
+      the shortcuts keep working.
+    </p>
+    <figure class="fig">
+      <a href="assets/images/ui_relief_preview.png"><img src="assets/images/ui_relief_preview.png" width="1400" height="860" alt="The Relief preview card over the canvas" loading="lazy"></a>
+      <figcaption><span class="fig-label">Fig. 4</span>The Relief preview: the tinted pixels take the mean of the frames.</figcaption>
+    </figure>
+  </section>
+
+  <section id="retouch">
+    <h2><span class="sec-num">04</span>Retouching</h2>
+    <p>
+      Retouch is a tool: the toolbar button, the <kbd>R</kbd> key or Edit &rarr;
+      Retouch Brush switches it on once there is a stacked result. A slim row above
+      the canvas holds the settings, and a left-drag paints pixels from the frame
+      chosen in <strong>Paint from</strong> onto the newest result. Size is the
+      brush radius in image pixels (<kbd>[</kbd> and <kbd>]</kbd> step it; changing
+      the source frame later re-sources the strokes already painted), Opacity
+      how strongly it paints. Each drag is one undo step
+      (<kbd>Ctrl</kbd>+<kbd>Z</kbd>, <kbd>Ctrl</kbd>+<kbd>Y</kbd>). Done or
+      <kbd>Esc</kbd> leaves the tool; with it off, a left-drag pans.
+    </p>
+    <figure class="fig">
+      <a href="assets/images/ui_retouch.png"><img src="assets/images/ui_retouch.png" width="1400" height="860" alt="The Retouch tool with its settings row above the canvas" loading="lazy"></a>
+      <figcaption><span class="fig-label">Fig. 5</span>The Retouch tool: source frame, size, opacity, undo and redo in one row.</figcaption>
+    </figure>
+  </section>
+
+  <section id="export">
+    <h2><span class="sec-num">05</span>Export</h2>
+    <p>
+      File &rarr; Export (<kbd>Ctrl</kbd>+<kbd>E</kbd>) opens the export dialog: the
+      output folder, a file-name template, the format (TIFF, PNG or JPEG), the bit
+      depth and the JPEG quality. The newest result is encoded from the
+      full-precision linear data with the retouching included, so a 16-bit file
+      holds real 16-bit samples. With <em>Copy metadata</em> on in the settings, the
+      EXIF block of the first source frame is copied into a JPEG or PNG file (its
+      orientation set upright, because the app already turned the pixels); a TIFF
+      carries none, and a message says so.
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Variable</th><th>Becomes</th></tr></thead>
+        <tbody>
+          <tr><td><code>{name}</code></td><td>the project name, or the first source file's name before the project is saved</td></tr>
+          <tr><td><code>{algo}</code></td><td>the method that made the result: <code>Apex</code>, <code>Relief</code> or <code>Strata</code></td></tr>
+          <tr><td><code>{date}</code>, <code>{time}</code></td><td>for example <code>2026-10-01</code> and <code>14-05-09</code>, in UTC</td></tr>
+          <tr><td><code>{timestamp}</code></td><td>Unix seconds</td></tr>
+          <tr><td><code>{n}</code></td><td>the number of source frames</td></tr>
+          <tr><td><code>{w}</code>, <code>{h}</code></td><td>the image size in pixels</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      Export never overwrites: if the file exists, a number is appended
+      (<code>name (2).png</code>). Characters that file systems reject are replaced,
+      and Windows device names such as <code>CON</code> are changed.
+      <strong>Save As</strong> always asks for the name.
+    </p>
+    <figure class="fig">
+      <a href="assets/images/ui_export.png"><img src="assets/images/ui_export.png" width="1400" height="860" alt="The export dialog" loading="lazy"></a>
+      <figcaption><span class="fig-label">Fig. 6</span>The export dialog shows the resulting file name as you type.</figcaption>
+    </figure>
+  </section>
+
+  <section id="projects">
+    <h2><span class="sec-num">06</span>Projects</h2>
+    <p>
+      A project is a small text file, <code>&lt;name&gt;.zstack.toml</code>, saved by
+      default next to the first source image. It stores the source list in order
+      (relative paths where the files lie below the project's folder), every stacking
+      setting and the retouch strokes, but not the photographs. New, Open, Open
+      Recent (the last ten), Save and Save As are in the File menu. A star in the
+      title bar marks unsaved changes; undoing a change removes it again, and
+      closing the window, New and Open ask to save, discard or cancel first.
+    </p>
+  </section>
+
+  <section id="settings">
+    <h2><span class="sec-num">07</span>Settings</h2>
+    <p>
+      Edit &rarr; Settings (<kbd>Ctrl</kbd>+<kbd>,</kbd>) holds the same keys the
+      command-line tool reads. Every edit applies at once and is saved a moment
+      later to <code>settings.toml</code>; Cancel restores the settings as they
+      were when the dialog opened. Load Config and Save Config exchange a settings
+      file with the command line. Every setting has a tooltip.
+    </p>
+    <dl class="defs">
+      <dt>General</dt><dd>Alignment mode, optimizer, bounded search, AKAZE seeding, brightness correction and chain alignment; auto-cull, the cull threshold, sort by sharpness and stack every Nth frame; compute device; and <em>Tile size</em>.</dd>
+      <dt>Apex</dt><dd>Pyramid levels, all color channels, grit suppression.</dd>
+      <dt>Relief</dt><dd>Estimation and smoothing radius, contrast threshold, the preview and its auto-detect, and the multigrid depth solver.</dd>
+      <dt>Strata</dt><dd>Base radius and detail focus.</dd>
+      <dt>Input</dt><dd>Rotation, crop, resize, reverse sort order and the EXIF orientation switch.</dd>
+      <dt>Output</dt><dd>Crop to common area, resize cropped to original, file format, bit depth, JPEG quality, name template, output folder and copy metadata.</dd>
+    </dl>
+    <p>
+      <strong>Tile size</strong> (desktop only) chooses how a stack is held while it
+      is fused. <em>In Memory</em>, the default, is the fastest. A tile size of 512,
+      1024, 2048 or 4096 pixels processes the picture in square tiles kept in a
+      scratch folder, so a stack that does not fit in memory can still be fused;
+      smaller tiles need less memory and more time. The command-line tool has its
+      own tile-size argument, which wins over this setting in a shared file.
+    </p>
+    <figure class="fig">
+      <a href="assets/images/ui_settings.png"><img src="assets/images/ui_settings.png" width="1400" height="860" alt="The settings dialog on its General tab" loading="lazy"></a>
+      <figcaption><span class="fig-label">Fig. 7</span>The settings dialog, in six tabs: General (alignment, auto-cull, compute device), Apex, Relief, Strata, Input (preprocessing) and Output (saving).</figcaption>
+    </figure>
+    <p class="more"><a href="cli.html#settings">Every key of the settings file</a></p>
+  </section>
+
+  <section id="help">
+    <h2><span class="sec-num">08</span>Shortcuts and help</h2>
+    <p>
+      Press <kbd>?</kbd> for the list of shortcuts and <kbd>F1</kbd> for the
+      manual, both inside the app. The first time auto-cull runs, the depth-map
+      preview opens or the Retouch tool is switched on, a short card explains it;
+      &ldquo;Don't show again&rdquo; is remembered.
+    </p>
+    <div class="fig-grid">
+      <figure class="fig">
+        <a href="assets/images/ui_shortcuts.png"><img src="assets/images/ui_shortcuts.png" width="1400" height="860" alt="The keyboard shortcut overlay" loading="lazy"></a>
+        <figcaption><span class="fig-label">Fig. 8</span>The shortcut overlay (<kbd>?</kbd>).</figcaption>
+      </figure>
+      <figure class="fig">
+        <a href="assets/images/ui_manual.png"><img src="assets/images/ui_manual.png" width="1400" height="860" alt="The built-in manual" loading="lazy"></a>
+        <figcaption><span class="fig-label">Fig. 9</span>The built-in manual (<kbd>F1</kbd>).</figcaption>
+      </figure>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Keys</th><th>Action</th></tr></thead>
+        <tbody>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>N</kbd></td><td>Start a new project</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd></td><td>Open a project</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>O</kbd></td><td>Add images</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>Save the project</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd></td><td>Save the project under a new name</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>E</kbd></td><td>Export the image</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>,</kbd></td><td>Open the settings</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd></td><td>Undo / redo a retouch stroke (also <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd>)</td></tr>
+          <tr><td><kbd>F1</kbd></td><td>Show the manual</td></tr>
+          <tr><td><kbd>?</kbd></td><td>Show the list of shortcuts</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>Close the open dialog or overlay, leave the Retouch tool, or dismiss the message</td></tr>
+          <tr><td><kbd>+</kbd> / <kbd>-</kbd></td><td>Zoom in / out</td></tr>
+          <tr><td><kbd>0</kbd> / <kbd>1</kbd></td><td>Fit the image / show it at 100&nbsp;%</td></tr>
+          <tr><td><kbd>Space</kbd></td><td>Hold to pan with a left-button drag while the Retouch tool is on</td></tr>
+          <tr><td><kbd>R</kbd></td><td>Turn the Retouch tool on or off</td></tr>
+          <tr><td><kbd>[</kbd> / <kbd>]</kbd></td><td>Smaller / larger brush</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="small">On macOS, Cmd replaces Ctrl. Shortcuts are ignored while a dialog is open, except <kbd>Esc</kbd>, which closes it.</p>
+  </section>
+
+  <section id="live-monitor">
+    <h2><span class="sec-num">09</span>Live Monitor</h2>
+    <p>
+      Live Monitor watches a folder. Each time new frames arrive, for example from a
+      camera that saves to a shared folder, the folder is stacked again with Apex
+      and the new result is shown. Stop Monitor ends it.
+    </p>
+  </section>
+
+  <section id="files">
+    <h2><span class="sec-num">10</span>Where files are kept</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>File</th><th>Folder</th><th>Content</th></tr></thead>
+        <tbody>
+          <tr><td><code>settings.toml</code>, <code>layout.toml</code>, <code>prefs.toml</code>, <code>recent.toml</code></td><td>the configuration folder: below <code>%APPDATA%</code> on Windows, <code>~/.config/z-stackr</code> on Linux, <code>~/Library/Application Support/z-stackr</code> on macOS</td><td>settings, panel sizes, dismissed hints, recent projects</td></tr>
+          <tr><td><code>stacker.log</code></td><td>the data folder (the temporary folder when there is none)</td><td>the run log; its path is shown when the app starts</td></tr>
+          <tr><td><code>stacker_result_*.png</code></td><td>the temporary folder</td><td>the 8-bit images behind the Results list</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      A settings file that cannot be read is renamed
+      <code>settings.toml.corrupt-&lt;seconds&gt;</code> and the defaults are used; it
+      is never overwritten.
+    </p>
+  </section>
+
+  <section id="browser">
+    <h2><span class="sec-num">11</span>In the browser</h2>
+    <p>
+      The app also runs in a web page, at
+      <a href="https://live.z-stackr.suitable-na.me">live.z-stackr.suitable-na.me</a>. It is the same window and the
+      same pipeline compiled to WebAssembly; the stacking runs in a Web Worker, so
+      the page stays responsive, and the images are read into the tab, never
+      uploaded. It needs a browser with WebAssembly SIMD and WebGL2 (Chrome or
+      Edge 91, Firefox 89, Safari 16.4 or newer); alignment needs WebGPU as well
+      (Chrome or Edge 113, Firefox 141 on Windows, Safari 26).
+    </p>
+    <figure class="fig">
+      <a href="assets/images/web_main.png"><img src="assets/images/web_main.png" width="1400" height="860" alt="The browser version: the same window without Live Monitor" loading="lazy"></a>
+      <figcaption><span class="fig-label">Fig. 10</span>The browser version. Live Monitor is gone; everything else is the desktop window.</figcaption>
+    </figure>
+    <p>What differs from the desktop app:</p>
+    <ul>
+      <li><strong>Alignment runs on the GPU only.</strong> Without WebGPU, Start
+        Stacking offers to stack without alignment; alignment mode None needs no GPU.
+        The refinement always uses the Nelder-Mead search. Apex, Relief (with the
+        multigrid depth map), Strata, auto-cull and decoding run on the CPU in one
+        worker.</li>
+      <li><strong>Memory.</strong> A tab gets about 2&nbsp;GiB. When a stack does not
+        fit, the app offers to stack it at the largest pre-resize percentage that
+        does; the desktop app and the command line stack the same images at full
+        size, out of core when needed.</li>
+      <li><strong>Files are uploads and downloads.</strong> Add Images, drag and drop
+        and Open Project read files into the page; Save, Export and Save Config
+        download a file. There is no output folder, no recent-projects list, no
+        Live Monitor and no camera RAW (develop RAW files to JPEG, PNG or TIFF
+        first). A project download is <code>&lt;name&gt;.zstack.toml</code>;
+        opening it asks for its images, matched by file name.</li>
+      <li><strong>Settings</strong> are kept in the browser's local storage.</li>
+      <li><strong>Shortcuts.</strong> <kbd>Ctrl</kbd>+<kbd>N</kbd> belongs to the
+        browser, so New Project is <kbd>Alt</kbd>+<kbd>N</kbd> there; the shortcut
+        list shows the keys in effect.</li>
+    </ul>
+  </section>
+
+</main>
+
+<footer>
+  <div class="container">
+    <p>z-stackr · &copy; 2026 The z-stackr contributors · MIT OR Apache-2.0</p>
+    <p><a href="methods.html">How it works</a> · <a href="app.html">Desktop app</a> · <a href="cli.html">Command line</a> · <a href="gpu.html">GPU</a> · <a href="project.html">Project</a></p>
+  </div>
+</footer>
+
+<script src="assets/js/main.js"></script>
+</body>
+</html>

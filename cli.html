@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Command line — z-stackr</title>
+<meta name="description" content="The z-stackr command-line tool: arguments, the shared settings file, out-of-core tiling, memory and disk, and folder monitoring.">
+<link rel="icon" type="image/svg+xml" href="assets/images/icon.svg">
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="container">
+    <a href="index.html" class="brand"><img src="assets/images/icon.svg" width="22" height="22" alt=""><span><span class="z">z</span>-stackr</span></a>
+    <nav>
+      <a href="index.html">Overview</a>
+      <a href="methods.html">How it works</a>
+      <a href="app.html">Desktop app</a>
+      <a href="cli.html" aria-current="page">Command line</a>
+      <a href="gpu.html">GPU</a>
+      <a href="project.html">Project</a>
+    </nav>
+  </div>
+</header>
+
+<main class="container">
+
+  <div class="page-head">
+    <p class="eyebrow">z-stackr-cli · binary z-stackr</p>
+    <h1>The command line</h1>
+    <p class="subtitle">
+      One folder of frames in, one image out, for batch work, scripts and stacks
+      larger than memory.
+    </p>
+  </div>
+
+  <section id="usage">
+    <h2><span class="sec-num">01</span>Usage</h2>
+    <div class="code-block">
+      <div class="code-block-head"><span>terminal</span><button class="copy-btn" type="button">Copy</button></div>
+      <pre><code>z-stackr --input-dir ./frames --output-file ./result/stacked.tif --mode apex --tile-size 512</code></pre>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Argument</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td><code>--input-dir &lt;DIR&gt;</code></td><td>Required. The folder with the frames (<code>.jpg</code>, <code>.jpeg</code>, <code>.png</code>, <code>.tif</code>, <code>.tiff</code>, any letter case; camera RAW files in a build with the <code>raw</code> feature), used in natural file-name order; the first is the alignment reference. The output and log files are never read as frames. See <code>--stacks</code> for a folder with subfolders.</td></tr>
+          <tr><td><code>--output-file &lt;FILE&gt;</code></td><td>Required. The extension picks the format (<code>.png</code>, <code>.tif</code>/<code>.tiff</code>, <code>.jpg</code>/<code>.jpeg</code>); without one, <code>image_saving.output_format</code> decides. PNG and TIFF are 16 bit unless <code>bit_depth = 8</code>. The path is checked before the first frame is decoded. With <code>--mode both</code> or <code>all</code> each method writes its own file, <code>_&lt;method&gt;</code> before the extension: <code>result.png</code> becomes <code>result_relief.png</code>, <code>result_apex.png</code> and, for <code>all</code>, <code>result_strata.png</code>. No file is written under the plain name.</td></tr>
+          <tr><td><code>--mode &lt;MODE&gt;</code></td><td>Required, in any letter case. <code>apex</code> (Laplacian pyramid), <code>relief</code> (depth map), <code>strata</code> (guided fusion), <code>both</code> (Relief and Apex) or <code>all</code> (Strata, Relief and Apex). <code>both</code> and <code>all</code> align once and fuse the same tile store once per method. Older mode names still work and are logged as renamed.</td></tr>
+          <tr><td><code>--tile-size &lt;SIZE&gt;</code></td><td>Required. At least 64; 512 is a good value. For Apex it is rounded up to a multiple of <code>2^(pyramid_levels - 1)</code>. Larger tiles lower the overlap overhead. With <code>both</code> and <code>all</code> the tiles are stored once, with the largest apron any of the methods needs.</td></tr>
+          <tr><td><code>--optimizer &lt;auto|lk|nm&gt;</code></td><td>Optional. The alignment optimizer for this run: <code>auto</code> (Lucas-Kanade, the Nelder-Mead simplex as fallback), <code>lk</code> (Lucas-Kanade only) or <code>nm</code> (simplex only). Overrides <code>optimizer</code> in the settings file; the file is not written back.</td></tr>
+          <tr><td><code>--stacks &lt;subfolders|single&gt;</code></td><td>Optional. When <code>--input-dir</code> has subfolders that hold frames: <code>subfolders</code> stacks each one on its own and makes <code>--output-file</code> an output folder, with one file per subfolder named by <code>filename_template</code>; <code>single</code> stacks only the images directly in the folder. A failing stack is reported and the others still run. Without the flag a terminal is asked; without a terminal the run stops and asks for it. Not combinable with <code>--monitor</code> in <code>subfolders</code> mode.</td></tr>
+          <tr><td><code>--no-gpu</code></td><td>Optional; in builds with the <code>gpu</code> feature. Keeps this run on the CPU whatever <code>compute_device</code> says; the same as <code>compute_device = "cpu"</code>.</td></tr>
+          <tr><td><code>--config &lt;FILE&gt;</code></td><td>A settings file (the format the desktop app writes). It must exist and parse: a mistake stops the run instead of silently using defaults.</td></tr>
+          <tr><td><code>--write-default-config</code></td><td>With <code>--config</code>: create a missing file with commented defaults first.</td></tr>
+          <tr><td><code>--monitor</code></td><td>Keep watching <code>--input-dir</code> and stack again when a frame is added or changed.</td></tr>
+          <tr><td><code>--log-file &lt;FILE&gt;</code></td><td>Also write the structured log to this file.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="settings">
+    <h2><span class="sec-num">02</span>The settings file</h2>
+    <p>
+      The command-line tool and the desktop app read and write one TOML format
+      with 39 keys, and every key reaches both. The 38 that apply to the builds
+      described on this site are listed below, with <code>settings_version</code>
+      first. Pass <code>--config settings.toml --write-default-config</code> once to
+      get a commented file with every default.
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Key</th><th>Default</th><th>Values and effect</th></tr></thead>
+        <tbody>
+          <tr><td><code>settings_version</code></td><td><code>2</code></td><td>written by the programs; a file without it is read as a legacy file and migrated (see below)</td></tr>
+          <tr><td><code>alignment_mode</code></td><td><code>"registration"</code></td><td><code>translation</code> (shift and uniform scale), <code>registration</code> (shift, scale, rotation), <code>affine</code> (all 6 parameters) or <code>none</code>; see <a href="methods.html#alignment">alignment</a>. Any letter case.</td></tr>
+          <tr><td><code>optimizer</code></td><td><code>"auto"</code></td><td><code>auto</code> (Lucas-Kanade, the simplex as fallback), <code>lucaskanade</code> or <code>neldermead</code>; <code>lk</code> and <code>nm</code> are accepted. <code>--optimizer</code> overrides it</td></tr>
+          <tr><td><code>bounded_search</code></td><td><code>false</code></td><td>keep the search in a band around the start</td></tr>
+          <tr><td><code>akaze_seeding</code></td><td><code>false</code></td><td>seed from feature matches (builds with <code>akaze</code>)</td></tr>
+          <tr><td><code>correct_brightness</code></td><td><code>true</code></td><td>match each aligned frame's brightness to the reference, in linear light</td></tr>
+          <tr><td><code>chain_alignment</code></td><td><code>false</code></td><td>align every frame to its aligned predecessor instead of the first frame</td></tr>
+          <tr><td><code>crop_to_common_area</code></td><td><code>true</code></td><td>crop to the rectangle every frame covers</td></tr>
+          <tr><td><code>resize_cropped_to_original</code></td><td><code>false</code></td><td>desktop app: stretch a cropped result back to the original size; no effect in the command line</td></tr>
+          <tr><td><code>auto_cull</code></td><td><code>true</code></td><td>leave out frames that add almost nothing</td></tr>
+          <tr><td><code>auto_cull_threshold_pct</code></td><td><code>0.0</code></td><td>0.0 to 50.0, the share of the detail pixels a frame must win; 0 is the automatic rule <code>min(2, 50 / N)</code></td></tr>
+          <tr><td><code>sort_by_sharpness</code></td><td><code>false</code></td><td>order the frames sharpest-first (the sharpest becomes the reference); the multigrid solver needs capture order</td></tr>
+          <tr><td><code>stack_every_nth</code></td><td><code>1</code></td><td>keep every Nth frame</td></tr>
+          <tr><td><code>tile_size</code></td><td><code>0</code></td><td>desktop app: out-of-core tile edge, 0 or 64 to 8192; the command line uses <code>--tile-size</code>, which always wins</td></tr>
+          <tr><td><code>pyramid_levels</code></td><td><code>8</code></td><td>Apex, 2 to 12</td></tr>
+          <tr><td><code>use_all_color_channels</code></td><td><code>false</code></td><td>let color vote in Apex</td></tr>
+          <tr><td><code>grit_suppression</code></td><td><code>true</code></td><td>3&times;3 winner in Apex's finest band</td></tr>
+          <tr><td><code>relief_estimation_radius</code></td><td><code>5</code></td><td>0 to 100</td></tr>
+          <tr><td><code>relief_smoothing_radius</code></td><td><code>2</code></td><td>0 to 50</td></tr>
+          <tr><td><code>relief_contrast_pct</code></td><td><code>0.0</code></td><td>0.0 to 1.0, the fraction of pixels that take the mean</td></tr>
+          <tr><td><code>relief_show_preview</code></td><td><code>false</code></td><td>desktop app: pause on the mask preview; no effect in the command line</td></tr>
+          <tr><td><code>relief_auto_detect</code></td><td><code>false</code></td><td>threshold from the median and median absolute deviation of the focus scores</td></tr>
+          <tr><td><code>relief_use_multigrid</code></td><td><code>false</code></td><td>solve the depth as a smooth surface (see <a href="methods.html#multigrid">multigrid</a>)</td></tr>
+          <tr><td><code>strata_base_radius</code></td><td><code>31</code></td><td>Strata, 8 to 64: the radius of the base/detail split</td></tr>
+          <tr><td><code>strata_detail_focus</code></td><td><code>3</code></td><td>Strata, 1 to 5: 1 soft, 5 close to winner-take-all</td></tr>
+          <tr><td><code>compute_device</code></td><td><code>"cpu"</code></td><td><code>cpu</code> or <code>gpu</code> (see <a href="gpu.html">GPU</a>)</td></tr>
+          <tr><td><code>[preprocessing] pre_rotation</code></td><td><code>0</code></td><td>0, 90, 180 or 270, clockwise</td></tr>
+          <tr><td><code>pre_crop_enabled</code></td><td><code>false</code></td><td>apply the crop below</td></tr>
+          <tr><td><code>pre_crop_spec</code></td><td><code>""</code></td><td>crop to <code>w,h</code> (centred) or <code>x,y,w,h</code></td></tr>
+          <tr><td><code>pre_resize_percent</code></td><td><code>100</code></td><td>10 to 100, Lanczos3</td></tr>
+          <tr><td><code>sort_reverse</code></td><td><code>false</code></td><td>reverse the file order (the reference is then the other end)</td></tr>
+          <tr><td><code>ignore_exif_orientation</code></td><td><code>false</code></td><td>load JPEG pixels as stored</td></tr>
+          <tr><td><code>[image_saving] output_format</code></td><td><code>"tiff"</code></td><td><code>tiff</code>, <code>png</code>, <code>jpeg</code></td></tr>
+          <tr><td><code>bit_depth</code></td><td><code>16</code></td><td>8 or 16 (JPEG is always 8)</td></tr>
+          <tr><td><code>jpeg_quality</code></td><td><code>95</code></td><td>1 to 100</td></tr>
+          <tr><td><code>filename_template</code></td><td><code>"{name}_stacked"</code></td><td>used when <code>--output-file</code> is a folder; the command line knows <code>{name}</code></td></tr>
+          <tr><td><code>default_output_dir</code></td><td><code>""</code></td><td>where a bare output file name goes</td></tr>
+          <tr><td><code>copy_metadata</code></td><td><code>false</code></td><td>copy the first frame's EXIF block into a PNG or JPEG result (orientation set upright); a TIFF cannot carry it and one warning says so</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="small">
+      A value out of range is clamped with a warning. The command line is strict
+      about types (a wrongly typed value stops the run); the desktop app keeps the
+      default for that key and shows a warning.
+    </p>
+    <p class="small">
+      <strong>Older files still load.</strong> A file without
+      <code>settings_version</code> is migrated so that it keeps its behavior; the
+      details are in <a href="methods.html#alignment">alignment</a>. Saving always
+      writes the current names.
+    </p>
+  </section>
+
+  <section id="memory">
+    <h2><span class="sec-num">03</span>Memory and disk</h2>
+    <p>
+      The command-line tool stores every aligned frame on disk as padded tiles, so
+      its memory does not depend on the image size and only weakly on the number of
+      frames. Alignment holds about 39 bytes per pixel whatever the frame count
+      (chain alignment adds 18); the fusion holds one padded tile of every frame.
+    </p>
+    <p>
+      The scratch folder takes <code>12 &times; ((T + 2A) / T)&sup2;</code> bytes per
+      source pixel per frame, where <code>T</code> is the tile size and
+      <code>A</code> the apron:
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Method</th><th>Apron <code>A</code></th><th>Scratch per pixel and frame at <code>T</code> = 512</th></tr></thead>
+        <tbody>
+          <tr><td>Apex, 8 levels (default)</td><td>512&nbsp;px</td><td>108 bytes</td></tr>
+          <tr><td>Apex, 6 levels</td><td>128&nbsp;px</td><td>27 bytes</td></tr>
+          <tr><td>Strata</td><td>101&nbsp;px</td><td>about 23 bytes</td></tr>
+          <tr><td>Relief, default radii</td><td>10&nbsp;px</td><td>about 13 bytes</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      For example, 100 frames of 24 megapixels with Apex at 8 levels need about
+      260&nbsp;GB of scratch disk; at 6 levels a quarter of that. The tool logs the
+      figure before it starts, and removes the folder when the run ends, also after
+      an error. With <code>--mode both</code> or <code>all</code> the tiles are
+      stored once, with the largest apron of the methods in the run.
+    </p>
+    <p>
+      The fusion pass holds, for a padded tile of <code>Q = (T + 2A)&sup2;</code>
+      pixels, <code>N &times; 12 &times; Q</code> bytes of frames plus about
+      <code>96 &times; Q</code> for Apex or <code>10 &times; Q</code> for Relief.
+      Strata holds <code>174 &times; Q</code> whatever the number of frames, because
+      it reads the frames on demand, two at a time. The next tile's frames are read
+      ahead on a second thread, which costs another <code>N &times; 12 &times; Q</code>
+      (nothing for Strata). The Relief multigrid solver adds whole-image planes of
+      6 bytes per pixel while it collects the votes and 28 while it solves. A
+      stack held in memory by the desktop app needs <code>12 &times; N</code> bytes
+      per pixel plus about 84 for Apex, 62 for Relief (98 with multigrid) or 150
+      for Strata.
+    </p>
+  </section>
+
+  <section id="monitor">
+    <h2><span class="sec-num">04</span>Watching a folder</h2>
+    <p>
+      With <code>--monitor</code> the tool keeps running and stacks the folder again
+      whenever a frame is added or changed, for example while a camera tethered to
+      the computer is still shooting. With <code>--mode both</code> or
+      <code>all</code>, the per-method result files next to the frames are never
+      read as frames.
+    </p>
+  </section>
+
+</main>
+
+<footer>
+  <div class="container">
+    <p>z-stackr · &copy; 2026 The z-stackr contributors · MIT OR Apache-2.0</p>
+    <p><a href="methods.html">How it works</a> · <a href="app.html">Desktop app</a> · <a href="cli.html">Command line</a> · <a href="gpu.html">GPU</a> · <a href="project.html">Project</a></p>
+  </div>
+</footer>
+
+<script src="assets/js/main.js"></script>
+</body>
+</html>

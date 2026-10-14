@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPU — z-stackr</title>
+<meta name="description" content="Alignment and the Apex, Relief and Strata fusions of z-stackr, and the Relief multigrid solver, on the graphics card through wgpu, with the CPU as reference and fallback.">
+<link rel="icon" type="image/svg+xml" href="assets/images/icon.svg">
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="container">
+    <a href="index.html" class="brand"><img src="assets/images/icon.svg" width="22" height="22" alt=""><span><span class="z">z</span>-stackr</span></a>
+    <nav>
+      <a href="index.html">Overview</a>
+      <a href="methods.html">How it works</a>
+      <a href="app.html">Desktop app</a>
+      <a href="cli.html">Command line</a>
+      <a href="gpu.html" aria-current="page">GPU</a>
+      <a href="project.html">Project</a>
+    </nav>
+  </div>
+</header>
+
+<main class="container">
+
+  <div class="page-head">
+    <p class="eyebrow">Optional · the gpu feature</p>
+    <h1>On the graphics card</h1>
+    <p class="subtitle">
+      Alignment, the Apex, Relief and Strata fusions and the Relief multigrid
+      solver can run on the GPU through wgpu (Vulkan, Direct3D 12 or Metal). The
+      CPU stays the reference and the fallback.
+    </p>
+  </div>
+
+  <section id="what-runs">
+    <h2><span class="sec-num">01</span>What runs where</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Stage</th><th>On the GPU</th></tr></thead>
+        <tbody>
+          <tr><td>Alignment: the objective</td><td>yes. Each candidate transform is evaluated on the device; the optimiser itself stays on the CPU. Pyramid levels under 64k pixels are evaluated on the CPU, where they are faster.</td></tr>
+          <tr><td>Alignment: the final warp</td><td>yes, with the coverage mask from the same pass</td></tr>
+          <tr><td>Apex fusion</td><td>yes, the whole fusion: pyramids, selection, averaged base, reconstruction</td></tr>
+          <tr><td>Relief fusion</td><td>yes: focus maps, selection against the threshold, guided filter (focus radius up to 100)</td></tr>
+          <tr><td>Relief multigrid solver</td><td>yes: the pinned depth is uploaded once and the whole cycle (restrict, prolong, Jacobi sweeps) runs on the device; the focus maps and the final smoothing stay on the CPU</td></tr>
+          <tr><td>Strata fusion</td><td>yes for its two heavy steps: the saliency of each frame and the guided-filter pair that refines the layer weights. The base/detail split, the accumulation and the final blend stay on the CPU</td></tr>
+          <tr><td>Decoding, auto-cull, export</td><td>no</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      Frames are folded in one at a time on the device, so its memory does not grow
+      with the number of frames, and only the result comes back. During alignment
+      each pyramid level goes up once; the hundreds of evaluations the optimiser
+      makes on it move only a few numbers. Lucas-Kanade, the first step of the
+      <code>auto</code> optimizer, is a CPU path in every build: only the
+      Nelder-Mead objective runs on the device, so a GPU run with
+      <code>optimizer = "neldermead"</code> uses the alignment kernels fully. In the
+      command-line tool Strata runs on the CPU.
+    </p>
+    <p>
+      In the <a href="https://live.z-stackr.suitable-na.me">browser version</a> only the alignment runs on the GPU, through WebGPU;
+      the fusions, Strata and the multigrid solver run on the CPU in a Web Worker.</p>
+  </section>
+
+  <section id="switching-on">
+    <h2><span class="sec-num">02</span>Switching it on</h2>
+    <p>
+      Build with the <code>gpu</code> feature and set the compute device to GPU, in
+      the desktop app's settings (Compute device) or in the settings file:
+    </p>
+    <div class="code-block">
+      <div class="code-block-head"><span>terminal</span><button class="copy-btn" type="button">Copy</button></div>
+      <pre><code>cargo build --release -p z-stackr-gui --features gpu
+cargo build --release -p z-stackr-cli --features gpu</code></pre>
+    </div>
+    <div class="code-block">
+      <div class="code-block-head"><span>settings.toml</span><button class="copy-btn" type="button">Copy</button></div>
+      <pre><code>compute_device = "gpu"</code></pre>
+    </div>
+    <p>
+      Without the feature, no GPU code is linked, the settings offer the CPU only,
+      and a settings file that asks for the GPU still loads: the run uses the CPU and
+      says so. The best adapter is chosen automatically: a discrete card before an
+      integrated one, Vulkan before Direct3D 12.
+    </p>
+  </section>
+
+  <section id="fallback">
+    <h2><span class="sec-num">03</span>When the GPU cannot help</h2>
+    <p>A run never fails because of the GPU.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>What happens</th><th>What z-stackr does</th></tr></thead>
+        <tbody>
+          <tr><td>no usable adapter, or a build without GPU support</td><td>the CPU from the start, with one message saying why</td></tr>
+          <tr><td>a call needs more device memory than the budget (3&nbsp;GiB), or a setting the kernels do not cover</td><td>the CPU for that call only; the GPU stays on for the others</td></tr>
+          <tr><td>the device reports an error, a call fails or returns non-finite values</td><td>the CPU for that call and the rest of the run, with one message giving the reason</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="agreement">
+    <h2><span class="sec-num">04</span>How close it is to the CPU</h2>
+    <p>
+      The GPU kernels follow the CPU code operation for operation and are tested
+      against it, but they are not bit for bit the same: drivers may fuse a multiply
+      and an add, and the GPU's division is not always correctly rounded.
+    </p>
+    <ul>
+      <li>Apex: within about 3&times;10<sup>&minus;7</sup> on the test stacks.</li>
+      <li>Relief: the focus maps agree to within 5&times;10<sup>&minus;7</sup> of their range; where two frames are equally sharp to within rounding, the winner can differ. On a real series of eight 8-megapixel frames, 0.016&nbsp;% of the pixels differed by more than 1/1000.</li>
+      <li>Strata: the saliency agrees to within 10<sup>&minus;5</sup> of the map's range. The guided-filter pair, whose window sums are <code>f32</code> on the device where the CPU uses <code>f64</code> tables, stays below 10<sup>&minus;3</sup> at worst and 10<sup>&minus;5</sup> on average for masks between 0 and 1.</li>
+      <li>Multigrid: the solved depth agrees within 10<sup>&minus;3</sup> of a frame index at worst and 10<sup>&minus;4</sup> on average; the operations and their order are the CPU's, only fused multiply-adds differ.</li>
+      <li>Alignment objective: the same pixels take part and the RMS agrees to about 10<sup>&minus;7</sup>; the warp agrees to within 3&times;10<sup>&minus;6</sup> with the same coverage.</li>
+    </ul>
+    <p>
+      Because the objective differs in the last digits, an alignment on the GPU can
+      take a slightly different path through the search. Where the frames have a
+      clear best fit, both land within about a thousandth of a pixel of each other.
+      Where the fit is flat (two frames far apart in focus share little detail),
+      both land on points of equal quality that can be a few tenths of a pixel apart,
+      about as far as the CPU's own alignment modes differ from each other there.
+    </p>
+  </section>
+
+  <section id="speed">
+    <h2><span class="sec-num">05</span>Speed</h2>
+    <div class="status">
+      <span class="status-label">TO BE MEASURED</span>
+      <p>
+        Timings will be published here once they have been measured on a quiet
+        machine; this includes whether the multigrid solver on the device beats the
+        CPU solve, and the Strata kernels. The first, informal runs on an integrated GPU showed the largest
+        gain in alignment, where the optimiser's many evaluations stay on the
+        device, and a smaller one for the fusions, which are limited by uploading
+        the frames.
+      </p>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="container">
+    <p>z-stackr · &copy; 2026 The z-stackr contributors · MIT OR Apache-2.0</p>
+    <p><a href="methods.html">How it works</a> · <a href="app.html">Desktop app</a> · <a href="cli.html">Command line</a> · <a href="gpu.html">GPU</a> · <a href="project.html">Project</a></p>
+  </div>
+</footer>
+
+<script src="assets/js/main.js"></script>
+</body>
+</html>

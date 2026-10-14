@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How it works — z-stackr</title>
+<meta name="description" content="How z-stackr aligns a focus series and fuses it: linear light, a sub-pixel registration search, brightness correction, auto-cull, and the Apex, Relief and Strata fusions.">
+<link rel="icon" type="image/svg+xml" href="assets/images/icon.svg">
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="container">
+    <a href="index.html" class="brand"><img src="assets/images/icon.svg" width="22" height="22" alt=""><span><span class="z">z</span>-stackr</span></a>
+    <nav>
+      <a href="index.html">Overview</a>
+      <a href="methods.html" aria-current="page">How it works</a>
+      <a href="app.html">Desktop app</a>
+      <a href="cli.html">Command line</a>
+      <a href="gpu.html">GPU</a>
+      <a href="project.html">Project</a>
+    </nav>
+  </div>
+</header>
+
+<main class="container">
+
+  <div class="page-head">
+    <p class="eyebrow">How it works</p>
+    <h1>Alignment and fusion</h1>
+    <p class="subtitle">
+      What happens to the frames between the folder and the finished image, and
+      what each setting changes.
+    </p>
+  </div>
+
+  <section id="linear-light">
+    <h2><span class="sec-num">01</span>Linear light</h2>
+    <p>
+      Camera files store gamma-encoded sRGB values. z-stackr decodes every frame to
+      linear light with exact lookup tables for 8-bit and 16-bit sources and keeps
+      it as three <code>f32</code> planes: a luma plane and two chroma planes
+      (BT.601 weights on linear RGB). Alignment, focus measures, pyramids and
+      blends all work on these planes; only the final image is encoded back to sRGB,
+      with correct rounding, so linear white is exactly 255 at 8 bits and 65&nbsp;535
+      at 16 bits.
+    </p>
+    <p>
+      When a frame is read, its EXIF orientation is applied (JPEG only, unless
+      switched off), then the optional rotation, crop and resize from the
+      preprocessing settings. Alpha is dropped and no color profile is applied.
+      In builds with the <code>raw</code> feature (desktop and command line),
+      camera RAW files (CR2, CR3, NEF, ARW, DNG, RAF, ORF, RW2, PEF and others) are
+      read too, developed with the camera's white balance and color matrix. With
+      <em>Copy metadata</em> on, the EXIF block of the first frame is copied into a
+      JPEG or PNG result, with the orientation set upright because the pixels were
+      already turned; a TIFF cannot carry it.
+    </p>
+  </section>
+
+  <section id="alignment">
+    <h2><span class="sec-num">02</span>Alignment</h2>
+    <p>
+      As the focus moves, the picture changes in size (focus breathing), and a
+      hand-held or rail-mounted series also shifts and turns a little. Every frame
+      is therefore registered to the first one with a transform fitted to its
+      pixels. How many parameters it may use is the alignment mode.
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Mode</th><th>Fits</th><th>Use it for</th></tr></thead>
+        <tbody>
+          <tr><td><code>translation</code></td><td>shift and one uniform scale (3 parameters)</td><td>a tripod or a rail, where the only change is focus breathing</td></tr>
+          <tr><td><code>registration</code></td><td>shift, scale and rotation (4 parameters, a similarity transform)</td><td>most series; the default</td></tr>
+          <tr><td><code>affine</code></td><td>the full 6 parameters: adds aspect (unequal scale in x and y) and shear</td><td>a lens or rail that changes the proportions from frame to frame; always searched within a band around the starting estimate: 20&nbsp;% for each shift and the scale, 20&deg; for the rotation, 10&nbsp;% for aspect and shear (narrower with bounded search)</td></tr>
+          <tr><td><code>none</code></td><td>nothing</td><td>frames that are already registered</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      The search is intensity based: it minimises the RMS difference between the
+      frame's luma and the warped reference luma, counting only the pixels the warp
+      can sample (a candidate that sees less than half the frame is rejected). It
+      runs coarse to fine over a luma pyramid and the result is sub-pixel.
+    </p>
+    <dl class="defs">
+      <dt>Optimizer</dt><dd><code>auto</code> (the default) runs Lucas-Kanade, a Gauss-Newton solver that is fast and needs a good starting point, and falls back to a Nelder-Mead simplex from the same start when it fails or ends no better. <code>lucaskanade</code> and <code>neldermead</code> force one of the two. Lucas-Kanade runs on the CPU; the <a href="https://live.z-stackr.suitable-na.me">browser version</a> always uses the simplex.</dd>
+      <dt>Nelder-Mead schedule</dt><dd>The simplex skips the full-resolution level at first, spends 150 iterations on each coarse level and 3 on the large levels near full resolution, restarts ten times at the coarsest level, and finishes with a short polish (40 iterations) at full resolution.</dd>
+      <dt>Bounded search</dt><dd>Keeps each parameter inside a narrow band around the starting estimate (5&nbsp;% of the image size for each shift, 5&nbsp;% for the scale, 5&deg; for the rotation, where the default search allows 20&nbsp;%, 20&nbsp;% and 20&deg;) by searching in logit space, so the simplex can never drift into a degenerate transform.</dd>
+      <dt>AKAZE seeding</dt><dd>In builds with the <code>akaze</code> feature, first matches image features and fits a starting transform with RANSAC (at least a fifth of the matches must agree). It helps on textured subjects with large shifts and is off by default, because feature detectors struggle on glossy or featureless ones. A seed that is not plausible is discarded.</dd>
+      <dt>Identity gate</dt><dd>A refined transform that fits strictly worse than no transform at all, judged on a reduced copy of the frames, is replaced by the identity.</dd>
+      <dt>Chain alignment</dt><dd>Off by default. Registers every frame to its aligned predecessor instead of to the first frame and composes the steps. It helps long series whose end frames share little with the reference, at the price of some accumulated drift. The coverage mask comes from the composed transform.</dd>
+    </dl>
+    <p>
+      <strong>Brightness correction</strong> (on by default) matches every aligned
+      frame to the reference in linear light, with a scale and a mild gamma fitted
+      to the mean and the spread of the pixels both frames cover. A flicker or an
+      auto-exposure step therefore does not reach the fusion. Switch it off for a
+      series shot at deliberately different exposures.
+    </p>
+    <p>
+      After warping, each frame has a black border where it has no data. With
+      <strong>Crop to common area</strong> (on by default) the result is cropped to
+      the largest rectangle that every frame covers. If that rectangle would be
+      smaller than half the frame, nothing is cropped and the app names the frame
+      that covers least. With it off, the full canvas is kept and the border shows
+      the nearest edge pixels. <strong>Resize cropped to original</strong> (off by
+      default) stretches a cropped result back to the original size, which changes
+      the proportions very slightly; the command-line tool keeps the cropped size.
+    </p>
+    <p class="small">
+      Settings files from before the modes changed their meaning are migrated when
+      read: the old <code>affine</code> becomes <code>registration</code>, and the
+      old single-pass <code>registration</code> becomes <code>registration</code>
+      with bounded search. The old fusion names PMax and DMap, and the
+      <code>dmap_*</code> keys, are still accepted when reading; everything that is
+      saved uses the current names.
+    </p>
+  </section>
+
+  <section id="auto-cull">
+    <h2><span class="sec-num">03</span>Auto-cull and frame order</h2>
+    <p>
+      Deep series often contain frames that add nothing: the plane of focus is in
+      empty background, or two frames are almost the same. With
+      <strong>Auto-Cull Frames</strong> on (the default), every frame is scored
+      with a focus map, and each pixel with real detail is won by the frame that is
+      sharpest there. A frame is dropped when it wins less than
+      <code>min(2, 50 / N)</code> percent of those pixels, where <code>N</code> is
+      the number of frames: 2&nbsp;% for stacks of up to 25 frames, half of the
+      average share for deeper ones, so a deep stack keeps its frames. If every
+      frame would be dropped, all are kept.
+    </p>
+    <p>
+      <code>auto_cull_threshold_pct</code> (0 to 50) replaces that rule with a fixed
+      share: a frame must win at least that percentage of the detail pixels. At 0,
+      the default, the automatic rule applies.
+    </p>
+    <p>
+      The kept frames are fused in capture order, which the Relief multigrid solver
+      needs. With <code>sort_by_sharpness</code> on they are ordered by the same
+      census instead, by walking from the centre of one frame's sharp area to the
+      nearest next one, and the sharpest frame becomes the alignment reference.
+      Dropped frames are never removed from your file list; the app shows them
+      dimmed and marked <em>culled</em>. Its <strong>Sort</strong> and
+      <strong>Cull</strong> buttons run the census alone, without a stack: Sort
+      reorders the list sharpest-first, Cull marks the frames below the threshold.
+    </p>
+  </section>
+
+  <section id="apex">
+    <h2><span class="sec-num">04</span>Fusion: Apex</h2>
+    <p>
+      Apex builds a Laplacian pyramid for every frame: a stack of band-pass images,
+      from the finest detail down to a small base. In every detail band, each pixel
+      takes the coefficient of the frame with the most energy there (the squared
+      coefficient), and the base is the average of all frames. Collapsing the fused
+      pyramid gives the result.
+    </p>
+    <dl class="defs">
+      <dt>Pyramid levels</dt><dd>2 to 12, default 8. More levels reach larger structures and cost time.</dd>
+      <dt>Grit suppression</dt><dd>On by default. In the finest band the winner is chosen by the energy of the 3&times;3 neighbourhood instead of the pixel alone, so an isolated noisy speck is less likely to win. Nothing is smoothed.</dd>
+      <dt>Use all color channels</dt><dd>Off by default. Lets the chroma bands vote on which frame is sharpest. Luma and color are still copied together from one frame.</dd>
+    </dl>
+    <p>
+      Apex keeps fine detail where structures at different depths cross, such as
+      hairs and bristles. It can raise the apparent noise in out-of-focus
+      background. The frames are folded in one at a time, so its memory does not
+      grow with the number of frames.
+    </p>
+  </section>
+
+  <section id="relief">
+    <h2><span class="sec-num">05</span>Fusion: Relief</h2>
+    <p>
+      Relief scores every pixel of every frame with a focus measure: in a window
+      around the pixel, a plane is fitted to the luma by least squares, and the
+      variance the plane does not explain is the sharpness. A flat area and a smooth
+      ramp both score zero, so a gradient is not mistaken for detail.
+    </p>
+    <p>
+      Where the best score any frame reaches is at or above a threshold, the pixel
+      comes from that frame; elsewhere it is the mean of all frames, which keeps
+      empty background clean. The luma of the result is then smoothed with an
+      edge-preserving guided filter that follows the image's own edges; the color
+      planes are not filtered.
+    </p>
+    <dl class="defs">
+      <dt>Estimation radius</dt><dd>0 to 100, default 5: the size of the focus window. Larger is smoother but less precise.</dd>
+      <dt>Smoothing radius</dt><dd>0 to 50, default 2: the window of the guided filter.</dd>
+      <dt>Contrast threshold</dt><dd>The fraction of pixels, ranked by their best focus score, that take the mean instead of one frame. Evaluated once on the whole image, so a tiled run has no seams.</dd>
+      <dt>Auto-detect</dt><dd>Chooses the threshold as the median of the non-zero focus scores plus 1.5 times their median absolute deviation. Otsu's method, used by earlier versions, collapses on the long tail of a focus map.</dd>
+      <dt>Multigrid depth solver</dt><dd><code>relief_use_multigrid</code>, off by default. See below.</dd>
+    </dl>
+    <p>
+      Relief gives smooth, low-noise backgrounds and is weaker than Apex on complex,
+      interlocking shapes. The desktop app can pause a Relief run on a preview of the
+      mask so you can set the threshold by eye (see the
+      <a href="app.html#relief-preview">desktop app</a>).
+    </p>
+    <h3 id="multigrid">Multigrid depth solver</h3>
+    <p>
+      The default Relief takes each pixel from the one frame with the best score,
+      so neighbouring pixels can jump between frames. With the multigrid solver on,
+      the index of the winning frame is instead solved as a smooth depth surface
+      over the whole image: the winning index is pinned where the focus is
+      reliable, and a multigrid method (restrict, prolong and relax over a
+      hierarchy of coarser grids) fills in the rest. A pixel between two frames
+      then blends both. Use it for continuous surfaces such as coins or flat
+      mineral samples, where the depth changes gradually; leave it off for
+      subjects with many separate depths, such as hairs. It needs more memory and
+      time than the default, and it needs the frames in capture order (so no
+      sort by sharpness).
+    </p>
+    <p>
+      The solver works on whole-image planes of the winning frame and the best
+      score (about 6 bytes per pixel), not on the frames, so a tiled run gives the
+      same result for every tile size and has no seams.
+    </p>
+    <figure class="fig">
+      <div class="fig-grid">
+        <a href="assets/images/fig_crop_apex.jpg"><img src="assets/images/fig_crop_apex.jpg" width="800" height="600" alt="Detail of the Apex result" loading="lazy"></a>
+        <a href="assets/images/fig_crop_relief.jpg"><img src="assets/images/fig_crop_relief.jpg" width="800" height="600" alt="The same detail of the Relief result" loading="lazy"></a>
+      </div>
+      <figcaption><span class="fig-label">Fig. 1</span>The same detail of the series from the overview, fused with Apex (left) and with Relief at the default settings (right). Apex keeps the fine texture; Relief is smoother and quieter.</figcaption>
+    </figure>
+  </section>
+
+  <section id="strata">
+    <h2><span class="sec-num">06</span>Fusion: Strata</h2>
+    <p>
+      Apex and Relief both pick: at each pixel, or in each band, one frame wins.
+      Strata blends instead. Every frame contributes to every pixel, weighted by
+      how sharp it is there, and the weights follow the edges of the picture.
+    </p>
+    <ol>
+      <li><strong>Saliency.</strong> Each frame is rated by the magnitude of the Laplacian of its luma, blurred over five passes. A running argmax keeps, for every pixel, the index of the sharpest frame (a tie goes to the earlier one). That gives a binary winner mask for each frame.</li>
+      <li><strong>Base and detail.</strong> Every frame is split with a box blur into a smooth base layer and a detail layer (the frame minus its base).</li>
+      <li><strong>Guided weights.</strong> Each frame's winner mask is refined with a guided filter that uses the frame's own luma as the guide, so a weight changes at an edge in the picture and not across it. The base weight is wide and smooth, which hands over brightness and color without seams; the detail weight is tight, so the handover is pixel accurate and detail is not doubled.</li>
+      <li><strong>Blend.</strong> The base and detail layers are averaged over all frames with their weights and added together. The weights come from luma only and are applied identically to the three planes, so the fusion cannot introduce color fringes.</li>
+    </ol>
+    <dl class="defs">
+      <dt>Base radius</dt><dd>8 to 64, default 31: the radius of the box blur that makes the base layer. A larger radius moves more of the picture into the detail layer.</dd>
+      <dt>Detail focus</dt><dd>1 to 5, default 3: the exponent applied to the detail weight, which concentrates it on the sharpest frame. The filter leaks a small weight to the frames next to the winner, and on a deep stack the leaks of many defocused frames would dilute the sharp one. 1 is soft, 5 is close to winner-take-all.</dd>
+    </dl>
+    <p>
+      Because every frame contributes, there are no hard switches between frames
+      and the transitions follow edges. The price is two passes over the frames and
+      about 150 bytes per pixel of working memory (Apex needs about 84), which does
+      not grow with the number of frames. Apex is the one to try first where fine
+      structures cross, and Relief where the background must be clean; the
+      <em>All Three</em> algorithm fuses a series with all of them from one
+      alignment so the results can be compared.
+    </p>
+    <figure class="fig">
+      <a href="assets/images/fig_crop_strata.jpg"><img src="assets/images/fig_crop_strata.jpg" width="800" height="600" alt="The detail of Fig. 1 fused with Strata" loading="lazy"></a>
+      <figcaption><span class="fig-label">Fig. 2</span>The detail of Fig. 1, fused with Strata at the default settings from the same alignment. The texture is close to Apex's and the tones a little lighter; along the top edge of the middle crystal Strata leaves a thin soft halo that Apex does not.</figcaption>
+    </figure>
+  </section>
+
+  <section id="retouch">
+    <h2><span class="sec-num">07</span>Retouch</h2>
+    <p>
+      No fusion method is right everywhere. The desktop app's retouch brush paints
+      pixels from one chosen source frame onto the result: a hard-edged circular
+      dab that blends towards the source at the chosen opacity. Each drag is one
+      undo step, and only the parts of the mask a stroke touched are stored, so the
+      history stays small. Strokes are saved in the project and painted again on the
+      next result.
+    </p>
+  </section>
+
+  <section id="large-images">
+    <h2><span class="sec-num">08</span>Images larger than memory</h2>
+    <p>
+      The command-line tool aligns one frame at a time and writes it to a scratch
+      folder as overlapping tiles. Fusion then reads one tile of every frame, fuses
+      it and pastes its interior into the output. The overlap (the apron) is as
+      wide as the method needs to see past the tile edge: 512&nbsp;px for Apex at
+      the default 8 levels, 128&nbsp;px at 6 levels, 101&nbsp;px for Strata
+      whatever its settings, and only
+      <code>estimation + 2 &times; smoothing + 1</code> pixels (10 at the defaults)
+      for Relief. A tiled result equals the whole-image result.
+    </p>
+    <p>
+      Strata holds a fixed working set per tile pixel (about 174 bytes) and reads
+      its frames on demand, two at a time, never a tile of every frame. The Relief
+      multigrid solver keeps its small whole-image planes, so it too gives the same
+      result at every tile size. While one tile is fused, the next tile's frames
+      are read on a second thread (prefetch; not for Strata), and the aligner decodes ahead of the
+      frame it is working on; neither changes the result. The desktop app can use
+      the same tiles: set <em>Tile size</em> in its settings to keep a stack that
+      does not fit in memory on disk instead (see
+      <a href="app.html#settings">settings</a>).
+    </p>
+    <p class="more"><a href="cli.html#memory">The memory and disk figures</a></p>
+  </section>
+
+</main>
+
+<footer>
+  <div class="container">
+    <p>z-stackr · &copy; 2026 The z-stackr contributors · MIT OR Apache-2.0</p>
+    <p><a href="methods.html">How it works</a> · <a href="app.html">Desktop app</a> · <a href="cli.html">Command line</a> · <a href="gpu.html">GPU</a> · <a href="project.html">Project</a></p>
+  </div>
+</footer>
+
+<script src="assets/js/main.js"></script>
+</body>
+</html>

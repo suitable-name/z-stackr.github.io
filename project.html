@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project — z-stackr</title>
+<meta name="description" content="The z-stackr workspace: crates, building with features and CPU levels, testing, licence and the current limits.">
+<link rel="icon" type="image/svg+xml" href="assets/images/icon.svg">
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="container">
+    <a href="index.html" class="brand"><img src="assets/images/icon.svg" width="22" height="22" alt=""><span><span class="z">z</span>-stackr</span></a>
+    <nav>
+      <a href="index.html">Overview</a>
+      <a href="methods.html">How it works</a>
+      <a href="app.html">Desktop app</a>
+      <a href="cli.html">Command line</a>
+      <a href="gpu.html">GPU</a>
+      <a href="project.html" aria-current="page">Project</a>
+    </nav>
+  </div>
+</header>
+
+<main class="container">
+
+  <div class="page-head">
+    <p class="eyebrow">Project</p>
+    <h1>Workspace, building and status</h1>
+    <p class="subtitle">
+      A Cargo workspace of five libraries and two programs, plus Python bindings built separately, MIT or Apache-2.0.
+    </p>
+  </div>
+
+  <section id="workspace">
+    <h2><span class="sec-num">01</span>Workspace</h2>
+    <p>
+      Package names are <code>z-stackr-*</code>; inside the code the crates are
+      called <code>stacker_core</code>, <code>stacker_pipeline</code> and so on.
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Package</th><th>What it holds</th></tr></thead>
+        <tbody>
+          <tr><td><code>z-stackr-cli</code></td><td>The command-line tool (binary <code>z-stackr</code>).</td></tr>
+          <tr><td><code>z-stackr-gui</code></td><td>The desktop app, built with <a href="https://slint.dev/">Slint</a> (binary <code>z-stackr-gui</code>).</td></tr>
+          <tr><td><code>z-stackr-core</code></td><td>The planar image type, linear/sRGB conversion, the settings schema and the file-backed tile store.</td></tr>
+          <tr><td><code>z-stackr-align</code></td><td>The alignment engine: the refiners (Lucas-Kanade and Nelder-Mead), the warps, brightness correction, the coverage mask and the optional AKAZE + RANSAC seed.</td></tr>
+          <tr><td><code>z-stackr-algo</code></td><td>The fusion algorithms (Apex, Relief with the guided filter and the multigrid solver, Strata), auto-cull and ordering, and the retouch session.</td></tr>
+          <tr><td><code>z-stackr-pipeline</code></td><td>The stages both apps call: frame discovery and order, decoding, alignment, auto-cull, fusion, tiling and the out-of-core tile runner, encoding, the settings loader, and the choice of CPU or GPU.</td></tr>
+          <tr><td><code>z-stackr-gpu</code></td><td>The GPU kernels through wgpu, kept out of the CPU crates.</td></tr>
+          <tr><td><code>z-stackr-web</code></td><td>The <a href="https://live.z-stackr.suitable-na.me">browser version</a>: the desktop app's window drawn on a canvas, built with Trunk.</td></tr>
+          <tr><td><code>z-stackr-web-worker</code></td><td>The Web Worker that runs the pipeline in the browser, so the page stays responsive.</td></tr>
+          <tr><td><code>z-stackr-web-core</code></td><td>The messages between the page and the worker, and the browser's memory budget.</td></tr>
+          <tr><td><code>z-stackr-python</code></td><td>Python bindings (import name <code>zstackr</code>): <code>stack_files</code> and <code>batch_stack</code> for files, out of core, and <code>stack_arrays</code> for numpy arrays in memory. A thin layer over the crates above, built with maturin and kept outside the workspace so that <code>cargo test --workspace</code> never links Python.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      Every step both apps need exists exactly once, in <code>z-stackr-pipeline</code>:
+      one mode table for alignment, one decoder, one frame order, one encoder and
+      one settings loader. The desktop app and the command-line tool therefore give
+      the same pixels for the same frames and settings.
+    </p>
+  </section>
+
+  <section id="building">
+    <h2><span class="sec-num">02</span>Building</h2>
+    <p>
+      z-stackr needs a <strong>nightly</strong> Rust compiler, because it uses portable
+      SIMD (<code>std::simd</code>). The repository's
+      <code>rust-toolchain.toml</code> pins the exact nightly with Clippy and rustfmt;
+      <code>rustup toolchain install</code> in the checkout installs it. Programs are
+      written to <code>target/release/</code>.
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Feature</th><th>Adds</th><th>Default</th></tr></thead>
+        <tbody>
+          <tr><td><code>akaze</code></td><td>Seeding the alignment from AKAZE feature matches</td><td>on in the desktop app, off in the command line</td></tr>
+          <tr><td><code>gpu</code></td><td>Alignment, Apex, Relief, Strata and the multigrid solver on the GPU through wgpu (<a href="gpu.html">GPU</a>)</td><td>off</td></tr>
+          <tr><td><code>raw</code></td><td>Camera RAW files (CR2, CR3, NEF, ARW, DNG, RAF, ORF, RW2, PEF and others) as input frames; native only</td><td>off</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="code-block">
+      <div class="code-block-head"><span>terminal — examples</span><button class="copy-btn" type="button">Copy</button></div>
+      <pre><code>cargo build --release -p z-stackr-gui
+cargo build --release -p z-stackr-cli --features akaze
+cargo build --release -p z-stackr-gui --features gpu
+cargo build --release -p z-stackr-cli --features raw</code></pre>
+    </div>
+    <p>
+      The Python bindings are built from their own folder with
+      <code>maturin develop --release</code> (or <code>maturin build --release</code>
+      for a wheel); the <code>gpu</code>, <code>raw</code> and <code>akaze</code>
+      features are passed with <code>--features</code>.
+    </p>
+    <h3>CPU level</h3>
+    <p>
+      The SIMD width is fixed when the program is compiled: 16 lanes with AVX-512, 8
+      with AVX2, otherwise 4. A plain build targets baseline x86-64 (SSE2, 4 lanes)
+      and runs everywhere; the output is the same at every width, only the speed
+      changes. For any processor with AVX2 and FMA (Intel Haswell, AMD Zen and
+      newer):
+    </p>
+    <div class="code-block">
+      <div class="code-block-head"><span>bash / zsh</span><button class="copy-btn" type="button">Copy</button></div>
+      <pre><code>RUSTFLAGS="-C target-cpu=x86-64-v3" cargo build --release -p z-stackr-gui</code></pre>
+    </div>
+    <div class="code-block">
+      <div class="code-block-head"><span>PowerShell</span><button class="copy-btn" type="button">Copy</button></div>
+      <pre><code>$env:RUSTFLAGS = "-C target-cpu=x86-64-v3"; cargo build --release -p z-stackr-gui</code></pre>
+    </div>
+    <p class="small">
+      <code>-C target-cpu=native</code> also enables AVX-512 where the processor has
+      it, but the program then runs only on processors with the same features.
+    </p>
+  </section>
+
+  <section id="testing">
+    <h2><span class="sec-num">03</span>Testing</h2>
+    <p>
+      Unit, integration and end-to-end tests cover every package; the end-to-end
+      tests stack the sample frames in the repository. The desktop app is tested
+      headless: a harness drives the real window with clicks and key presses and
+      runs every button, shortcut and menu item in every app state. A second harness,
+      <a href="https://crates.io/crates/slint-harness">slint-harness</a>, runs the
+      window in a throw-away profile: it checks the layout at the default and the
+      smallest window size, clicks every control, stacks with each engine, and
+      fails when a control in the interface files is reached by no scenario. The GPU kernels
+      are checked against the CPU code and with injected device failures; on a
+      machine without a GPU adapter those tests report <code>SKIPPED</code>.
+    </p>
+    <div class="code-block">
+      <div class="code-block-head"><span>terminal</span><button class="copy-btn" type="button">Copy</button></div>
+      <pre><code>cargo test -p z-stackr-pipeline
+cargo test -p z-stackr-gui --lib ui_flows
+cargo test -p z-stackr-gui --features ui-harness --test ui</code></pre>
+    </div>
+  </section>
+
+  <section id="status">
+    <h2><span class="sec-num">04</span>Status and limits</h2>
+    <ul>
+      <li>There are no ready-built programs yet; build from source, or use the <a href="https://live.z-stackr.suitable-na.me">browser version</a>.</li>
+      <li>No color profile is applied when frames are read, and alpha is dropped.</li>
+      <li><code>copy_metadata</code> copies the first frame's EXIF block into PNG and JPEG results; a TIFF cannot carry it.</li>
+      <li>Strata and the multigrid solver have kernels for the GPU in the native builds; Strata in the command-line tool runs on the CPU. Their timings have not been measured yet.</li>
+      <li>The desktop app holds the whole stack in memory by default (12 bytes per pixel and frame, plus about 84 per pixel for Apex, 62 for Relief and 150 for Strata). Set a tile size in its settings, or use the command-line tool, for stacks that do not fit.</li>
+      <li>The Python bindings run Apex, Relief and Strata; build them from source with maturin.</li>
+      <li>GPU results agree with the CPU within a small tolerance, not bit for bit (see <a href="gpu.html#agreement">GPU</a>).</li>
+    </ul>
+  </section>
+
+  <section id="licence">
+    <h2><span class="sec-num">05</span>Licence</h2>
+    <p>
+      z-stackr is licensed under either the Apache License, Version 2.0, or the MIT
+      licence, at your option. Every package declares
+      <code>license = "MIT OR Apache-2.0"</code>. Contributions, bug reports and
+      feature requests are welcome.
+    </p>
+  </section>
+
+</main>
+
+<footer>
+  <div class="container">
+    <p>z-stackr · &copy; 2026 The z-stackr contributors · MIT OR Apache-2.0</p>
+    <p><a href="methods.html">How it works</a> · <a href="app.html">Desktop app</a> · <a href="cli.html">Command line</a> · <a href="gpu.html">GPU</a> · <a href="project.html">Project</a></p>
+  </div>
+</footer>
+
+<script src="assets/js/main.js"></script>
+</body>
+</html>

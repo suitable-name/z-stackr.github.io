@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>z-stackr — focus stacking in Rust</title>
+<meta name="description" content="z-stackr aligns a series of macro or micro photographs taken at different focus distances and fuses them into one image that is sharp from front to back. Desktop app, command-line tool and Python bindings. MIT or Apache-2.0.">
+<link rel="icon" type="image/svg+xml" href="assets/images/icon.svg">
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="container">
+    <a href="index.html" class="brand"><img src="assets/images/icon.svg" width="22" height="22" alt=""><span><span class="z">z</span>-stackr</span></a>
+    <nav>
+      <a href="index.html" aria-current="page">Overview</a>
+      <a href="methods.html">How it works</a>
+      <a href="app.html">Desktop app</a>
+      <a href="cli.html">Command line</a>
+      <a href="gpu.html">GPU</a>
+      <a href="project.html">Project</a>
+    </nav>
+  </div>
+</header>
+
+<main class="container">
+
+  <div class="page-head">
+    <p class="eyebrow">Focus stacking · Rust · desktop, command line and browser</p>
+    <h1>Sharp from front to back.</h1>
+    <p class="subtitle">
+      z-stackr takes a series of macro or micro photographs focused at different
+      depths, aligns them and fuses the sharp parts of each into one picture.
+    </p>
+    <p class="cta-row">
+      <a class="cta" href="#getting-started">Build and run it</a>
+      <a class="cta cta-secondary" href="app.html">Tour the desktop app</a>
+      <a class="cta cta-secondary" href="https://live.z-stackr.suitable-na.me">Try it in the browser</a>
+    </p>
+  </div>
+
+  <section class="intro-grid" aria-label="Introduction">
+    <div>
+      <p>
+        A lens focused close up has a very thin plane of focus. Photograph the
+        subject again and again while the focus moves through it, and every frame
+        holds a different slice in focus. z-stackr registers the frames onto one
+        another, decides pixel by pixel which frame is sharpest, and blends the
+        result without seams.
+      </p>
+      <p>
+        It does this in linear light, with three fusion methods to choose from, an
+        aligner that corrects the change in magnification as the focus moves, and an
+        optional GPU path. The same pipeline runs in a desktop app, in a
+        command-line tool that stacks images larger than memory, and from Python.
+      </p>
+      <p>
+        <strong>Licence:</strong> MIT or Apache-2.0, at your option.
+      </p>
+    </div>
+    <figure class="fig">
+      <div class="frame">
+        <div class="compare" style="--split: 50%">
+          <img src="assets/images/fig_compare_frame.jpg" width="1600" height="900" alt="One frame of the stack: only the front crystals are sharp">
+          <img class="after" src="assets/images/fig_compare_stack.jpg" width="1600" height="900" alt="The stacked result: every crystal is sharp">
+          <span class="tag left">ONE FRAME</span>
+          <span class="tag right">STACKED · APEX</span>
+          <span class="handle" aria-hidden="true"></span>
+          <input type="range" min="0" max="100" value="50" aria-label="Move the split between one frame and the stacked result">
+        </div>
+      </div>
+      <figcaption><span class="fig-label">Fig. 1</span>Rough crystals on a white card, 28 frames at 3840&times;2160, stacked at half size with registration alignment; auto-cull kept 13 frames. Left of the line: the first frame. Right: the stack fused with Apex. Drag across the picture to compare.</figcaption>
+    </figure>
+  </section>
+
+  <section id="what-it-does">
+    <h2><span class="sec-num">01</span>What it does</h2>
+    <div class="card-grid">
+      <a class="card" href="methods.html#alignment">
+        <h3>Aligns the frames</h3>
+        <p>Corrects shift, scale, rotation and, if you ask, aspect and shear from frame to frame with a sub-pixel intensity search, matches their brightness, then crops to the area every frame covers.</p>
+      </a>
+      <a class="card" href="methods.html#apex">
+        <h3>Three fusion methods</h3>
+        <p>Apex (Laplacian pyramid) for fine detail, Relief (focus map, guided filter and an optional multigrid depth solver) for smooth, quiet results, and Strata (guided soft blend) where every frame contributes.</p>
+      </a>
+      <a class="card" href="methods.html#auto-cull">
+        <h3>Drops frames that add nothing</h3>
+        <p>Auto-cull scores every frame's share of the sharp detail and leaves out the ones that contribute almost nothing.</p>
+      </a>
+      <a class="card" href="app.html">
+        <h3>A desktop app</h3>
+        <p>Projects, drag and drop, live previews while aligning, Sort and Cull actions, retouching from a chosen frame, optional camera RAW input, and an export dialog with file-name templates.</p>
+      </a>
+      <a class="card" href="cli.html">
+        <h3>A command-line tool</h3>
+        <p>Stacks tile by tile from a scratch folder, so a stack larger than memory works too; it can stack every subfolder of a folder in one run, write all three methods from one alignment, and watch a folder and re-stack as frames arrive.</p>
+      </a>
+      <a class="card" href="gpu.html">
+        <h3>Optional GPU</h3>
+        <p>Alignment, the Apex, Relief and Strata fusions and the multigrid solver can run on the graphics card, with the CPU as the reference and the fallback.</p>
+      </a>
+    </div>
+  </section>
+
+  <section id="pipeline">
+    <h2><span class="sec-num">02</span>From a series to one picture</h2>
+    <figure class="fig">
+      <div class="frame">
+<svg class="diagram" viewBox="0 0 960 230" role="img" aria-labelledby="pipe-title" xmlns="http://www.w3.org/2000/svg">
+  <title id="pipe-title">The stages of a stack: decode to linear light, align to the first frame, auto-cull, fuse with Apex, Relief or Strata, encode to sRGB.</title>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="head" d="M 0 0 L 10 5 L 0 10 z"/>
+    </marker>
+  </defs>
+  <rect class="box" x="10" y="40" width="170" height="130" rx="6"/>
+  <text class="lbl" x="24" y="64">1 · DECODE</text>
+  <text x="24" y="92">JPEG, PNG, TIFF</text>
+  <text class="muted" x="24" y="112">8 or 16 bit, RAW</text>
+  <text class="muted" x="24" y="132">to linear light,</text>
+  <text class="muted" x="24" y="150">three f32 planes</text>
+
+  <rect class="box" x="200" y="40" width="170" height="130" rx="6"/>
+  <text class="lbl" x="214" y="64">2 · ALIGN</text>
+  <text x="214" y="92">to the first frame</text>
+  <text class="muted" x="214" y="112">shift, scale,</text>
+  <text class="muted" x="214" y="132">rotation; match</text>
+  <text class="muted" x="214" y="150">brightness; crop</text>
+
+  <rect class="box" x="390" y="40" width="170" height="130" rx="6"/>
+  <text class="lbl" x="404" y="64">3 · AUTO-CULL</text>
+  <text x="404" y="92">optional</text>
+  <text class="muted" x="404" y="112">drop frames that</text>
+  <text class="muted" x="404" y="132">win almost no</text>
+  <text class="muted" x="404" y="150">sharp detail</text>
+
+  <rect class="box-accent" x="580" y="40" width="190" height="130" rx="6"/>
+  <text class="lbl" x="594" y="64">4 · FUSE</text>
+  <text x="594" y="92">Apex · Relief · Strata</text>
+  <text class="muted" x="594" y="112">the sharpest frame</text>
+  <text class="muted" x="594" y="132">per pixel, blended</text>
+  <text class="muted" x="594" y="150">without seams</text>
+
+  <rect class="box" x="790" y="40" width="160" height="130" rx="6"/>
+  <text class="lbl" x="804" y="64">5 · ENCODE</text>
+  <text x="804" y="92">to sRGB</text>
+  <text class="muted" x="804" y="112">TIFF, PNG 16 bit,</text>
+  <text class="muted" x="804" y="132">or JPEG 8 bit</text>
+
+  <path class="arrow" d="M 181 105 H 198" marker-end="url(#ah)"/>
+  <path class="arrow" d="M 371 105 H 388" marker-end="url(#ah)"/>
+  <path class="arrow" d="M 561 105 H 578" marker-end="url(#ah)"/>
+  <path class="arrow" d="M 771 105 H 788" marker-end="url(#ah)"/>
+
+  <text class="lbl" x="200" y="200">GPU OPTIONAL</text>
+  <path class="thin" d="M 200 186 H 370"/>
+  <text class="lbl" x="580" y="200">GPU OPTIONAL (APEX, RELIEF, STRATA)</text>
+  <path class="thin" d="M 580 186 H 770"/>
+</svg>
+      </div>
+      <figcaption><span class="fig-label">Fig. 2</span>The five stages. The desktop app and the command-line tool call the same functions for each one, so the same frames and settings give the same pixels in both.</figcaption>
+    </figure>
+    <p>
+      The frames are read in natural file-name order (<code>frame_2</code> before
+      <code>frame_10</code>), and the first one is the reference the others are
+      aligned to. Everything after decoding runs on linear-light planes, so a blend
+      of two frames is a blend of light, not of gamma-encoded numbers, and linear
+      white comes out as exactly 255 or 65&nbsp;535.
+    </p>
+    <figure class="fig">
+      <a href="assets/images/fig_input_frames.jpg">
+        <img src="assets/images/fig_input_frames.jpg" width="1600" height="900" alt="Four frames of the input series, each sharp at a different depth" loading="lazy">
+      </a>
+      <figcaption><span class="fig-label">Fig. 3</span>Frames 1, 10, 19 and 28 of the series in Fig. 1. The plane of focus moves from the front of the crystals to the back.</figcaption>
+    </figure>
+    <p class="more"><a href="methods.html">How the alignment and the three fusion methods work</a></p>
+  </section>
+
+  <section id="app">
+    <h2><span class="sec-num">03</span>The desktop app</h2>
+    <p>
+      <code>z-stackr-gui</code> keeps the whole stack in memory and shows what it
+      does: each frame appears as it is aligned, a chip in the status strip shows
+      every running job with an estimate of the time left, and the result lands in
+      a list next to your source files. Projects remember the files, the settings
+      and every retouch stroke; the manual is built in (F1).
+    </p>
+    <figure class="fig">
+      <a href="assets/images/ui_main.png">
+        <img src="assets/images/ui_main.png" width="1400" height="860" alt="The z-stackr desktop app: source files and results on the left, the stacked image on the canvas" loading="lazy">
+      </a>
+      <figcaption><span class="fig-label">Fig. 4</span>The main window with a stacked result on the canvas.</figcaption>
+    </figure>
+    <p>
+      The same window also runs in the browser, at
+      <a href="https://live.z-stackr.suitable-na.me">live.z-stackr.suitable-na.me</a>: nothing is installed and the
+      images never leave the tab. It aligns on the GPU through WebGPU and stacks in
+      the page's memory, so very large series are stacked at a reduced size there
+      (<a href="app.html#browser">what differs</a>).
+    </p>
+    <p class="more"><a href="app.html">A tour of the desktop app</a></p>
+  </section>
+
+  <section id="cli">
+    <h2><span class="sec-num">04</span>The command line</h2>
+    <p>
+      <code>z-stackr</code> stacks a folder of frames into one file. It writes each
+      aligned frame to a scratch folder as padded tiles and fuses tile by tile, so
+      its memory does not grow with the image size. It reads the same settings file
+      the desktop app writes.
+    </p>
+    <div class="code-block">
+      <div class="code-block-head"><span>terminal</span><button class="copy-btn" type="button">Copy</button></div>
+      <pre><code>z-stackr --input-dir ./frames --output-file ./stacked.tif --mode apex --tile-size 512</code></pre>
+    </div>
+    <p class="more"><a href="cli.html">Every argument, the settings file and the disk budget</a></p>
+  </section>
+
+  <section id="getting-started">
+    <h2><span class="sec-num">05</span>Getting started</h2>
+    <p>
+      z-stackr is built from source with Rust. It needs the <strong>nightly</strong>
+      compiler (it uses portable SIMD); the repository pins the exact version, and
+      <a href="https://rustup.rs/">rustup</a> installs it on the first build. There
+      are no ready-built programs yet.
+    </p>
+    <div class="code-block">
+      <div class="code-block-head"><span>terminal — in the source folder</span><button class="copy-btn" type="button">Copy</button></div>
+      <pre><code># the desktop app
+cargo build --release -p z-stackr-gui
+
+# the command-line tool
+cargo build --release -p z-stackr-cli
+
+# either one with the GPU path, or with camera RAW input
+cargo build --release -p z-stackr-gui --features gpu
+cargo build --release -p z-stackr-cli --features raw</code></pre>
+    </div>
+    <p>
+      The programs are written to <code>target/release/</code>. Start
+      <code>z-stackr-gui</code>, drop a folder of frames on the window, choose an
+      algorithm and press <strong>Start Stacking</strong>.
+    </p>
+    <p class="small">
+      A plain build targets every 64-bit x86 processor and uses 4-lane vectors.
+      For a faster build on a processor with AVX2 (Intel Haswell, AMD Zen and
+      newer), set <code>RUSTFLAGS="-C target-cpu=x86-64-v3"</code>; see
+      <a href="project.html#building">building</a> for all the options.
+    </p>
+  </section>
+
+  <section id="status">
+    <h2><span class="sec-num">06</span>Status</h2>
+    <ul>
+      <li>Version 1.0.0. The desktop app and the command-line tool are complete and share one pipeline and one settings file.</li>
+      <li>There are no ready-built downloads yet; build from source, or use the <a href="https://live.z-stackr.suitable-na.me">browser version</a>.</li>
+      <li>EXIF metadata is copied to PNG and JPEG results, not to TIFF, and no color profile is applied when frames are read.</li>
+      <li>Python bindings (<code>zstackr</code>) are built with maturin and are not part of the main workspace.</li>
+    </ul>
+    <p class="more"><a href="project.html#status">The full list of limits</a></p>
+  </section>
+
+</main>
+
+<footer>
+  <div class="container">
+    <p>z-stackr · &copy; 2026 The z-stackr contributors · MIT OR Apache-2.0</p>
+    <p><a href="methods.html">How it works</a> · <a href="app.html">Desktop app</a> · <a href="cli.html">Command line</a> · <a href="gpu.html">GPU</a> · <a href="project.html">Project</a></p>
+  </div>
+</footer>
+
+<script src="assets/js/main.js"></script>
+</body>
+</html>
